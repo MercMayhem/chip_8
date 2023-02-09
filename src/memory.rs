@@ -1,10 +1,10 @@
-struct Memory{
-    addr_mem : [u8; 4096],
-    reg : [u8; 16],
-    i : [u8; 2],
-    pc : [u8; 2],
-    stack : [Option<[u8; 2]>; 16],
-    sp : u8,
-    delay : u8,
-    sound : u8
+pub struct Memory{
+    pub addr_mem : [u8; 4096],
+    pub reg : [u8; 16],
+    pub i : u16,
+    pub pc : u16,
+    pub stack : [Option<u16>; 16],
+    pub sp : u8,
+    pub delay : u8,
+    pub sound : u8
 }
