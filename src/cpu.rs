@@ -1,10 +1,13 @@
 use std::{path::Path, fs::read};
 use crate::memory::Memory;
 use crate::opcode::{Opcode, OpcodeTypes};
+extern crate rand;
+use crate::cpu::rand::Rng;
 
 struct Cpu{
     opcode : Opcode,
-    memory : Memory
+    memory : Memory,
+    keyboard : [u8; 16]
 }
 
 impl Cpu{
@@ -18,6 +21,10 @@ impl Cpu{
         for i in file.iter().enumerate(){
             self.memory.addr_mem[i.0 + 511] = *i.1
         }
+    }
+
+    fn wait_input() -> u8 {
+        todo!()
     }
 
     fn fetch(&mut self, pc: u16){
@@ -157,7 +164,90 @@ impl Cpu{
                 self.memory.reg[15] = msb;
 
                 self.memory.reg[reg as usize] <<= 1;
-            }
+            },
+            OpcodeTypes::SNEVxVy => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg1 = bytes[0] & 0x0F;
+                let reg2 = bytes[1].rotate_left(4) & 0x0F;
+
+                if self.memory.reg[reg1 as usize] != self.memory.reg[reg2 as usize]{
+                    self.memory.pc += 2;
+                }
+            },
+            OpcodeTypes::LDIAddr => {
+                let addr = self.opcode.code & 0xFFF;
+                self.memory.i = addr
+            },
+            OpcodeTypes::JPV0Addr => {
+                let addr = self.opcode.code & 0xFFF;
+                self.memory.pc = self.memory.reg[0] as u16 + addr;
+            },
+            OpcodeTypes::RNDVxbyte => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+                let byte = bytes[1];
+
+                let random_byte: u8 = rand::thread_rng().gen();
+
+                self.memory.reg[reg as usize] = random_byte & byte;
+            },
+            OpcodeTypes::DRWVxVyNibble => {
+                todo!()
+            },
+            OpcodeTypes::SKPVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let byte = bytes[0] & 0x0F;
+
+                if self.keyboard[byte as usize] == 1{
+                    self.memory.pc += 2
+                }
+            },
+            OpcodeTypes::SKNPVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let byte = bytes[0] & 0x0F;
+
+                if self.keyboard[byte as usize] == 0{
+                    self.memory.pc += 2
+                }
+            },
+            OpcodeTypes::LDVxDT => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                self.memory.reg[reg as usize] = self.memory.delay;
+            },
+            OpcodeTypes::LDVxK => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                let k = Self::wait_input();
+                self.memory.reg[reg as usize] = k;
+            },
+            OpcodeTypes::LDDTVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                self.memory.delay = self.memory.reg[reg as usize]
+            },
+            OpcodeTypes::LDSTVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                self.memory.sound = self.memory.reg[reg as usize]
+            },
+            OpcodeTypes::ADDIVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                self.memory.i += self.memory.reg[reg as usize] as u16;
+            },
+            OpcodeTypes::LDFVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                self.memory.i = (self.memory.reg[reg as usize] * 5) as u16
+            },
+            
         }
     }
 }
