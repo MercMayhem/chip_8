@@ -247,7 +247,35 @@ impl Cpu{
 
                 self.memory.i = (self.memory.reg[reg as usize] * 5) as u16
             },
-            
+            OpcodeTypes::LDBVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                let number = self.memory.reg[reg as usize];
+                let hundred = number / 100;
+                let tens = (number / 10) % 10;
+                let ones = number % 10;
+
+                self.memory.addr_mem[self.memory.i as usize] = hundred;
+                self.memory.addr_mem[self.memory.i as usize + 1] = tens;
+                self.memory.addr_mem[self.memory.i as usize + 2] = ones;
+            },
+            OpcodeTypes::LDIVx => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                for num in 0..=reg {
+                    self.memory.addr_mem[(self.memory.i + num as u16) as usize] = self.memory.reg[reg as usize];
+                }
+            },
+            OpcodeTypes::LDVxI => {
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                for num in 0..=reg {
+                    self.memory.reg[reg as usize] = self.memory.addr_mem[(self.memory.i + num as u16) as usize];
+                }
+            }
         }
     }
 }
