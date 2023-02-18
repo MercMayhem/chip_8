@@ -4,39 +4,56 @@ use crate::opcode::{Opcode, OpcodeTypes};
 extern crate rand;
 use crate::cpu::rand::Rng;
 
-struct Cpu{
+const FONT_SET: [[u8; 5]; 16] = [[0xF0,0x90,0x90,0x90,0xF0], [0x20,0x60,0x20,0x20,0x70,], [0xF0,0x10,0xF0,0x80,0xF0], [0xF0,0x10,0xF0,0x10,0xF0], [0x90,0x90,0xF0,0x10,0x10], 
+[0xF0,0x80,0xF0,0x10,0xF0], [0xF0,0x80,0xF0,0x90,0xF0], [0xF0,0x10,0x20,0x40,0x40], [0xF0,0x90,0xF0,0x90,0xF0], [0xF0,0x90,0xF0,0x10,0xF0], 
+[0xF0,0x90,0xF0,0x90,0x90], [0xE0,0x90,0xE0,0x90,0xE0], [0xF0,0x80,0x80,0x80,0xF0], [0xE0,0x90,0x90,0x90,0xE0], [0xF0,0x80,0xF0,0x80,0xF0], [0xF0,0x80,0xF0,0x80,0x80]];
+
+pub struct Cpu{
     opcode : Opcode,
     memory : Memory,
     keyboard : [u8; 16]
 }
 
 impl Cpu{
-    fn initialize(&mut self, file_path: &str){
+    pub fn initialize(file_path: &str) -> Cpu{
         let path = Path::new(file_path);
         let file = read(path).unwrap();
+
+        let mut addr_mem: [u8; 4096] = [0; 4096];
 
         if file.len() > 4096{
             panic!("Incorrect length of file")
         }
-        for i in file.iter().enumerate(){
-            self.memory.addr_mem[i.0 + 511] = *i.1
-        }
-    }
 
-    fn wait_input() -> u8 {
+        for (start, bytes) in FONT_SET.iter().enumerate(){
+            addr_mem[5 * start] = bytes[0];
+            addr_mem[5 * start + 1] = bytes[1];
+            addr_mem[5 * start + 2] = bytes[2];
+            addr_mem[5 * start + 3] = bytes[3];
+            addr_mem[5 * start + 4] = bytes[4];
+        }
+
+        for i in file.iter().enumerate(){
+            addr_mem[i.0 + 511] = *i.1
+        }
+
         todo!()
     }
 
-    fn fetch(&mut self, pc: u16){
+    pub fn wait_input() -> u8 {
+        todo!()
+    }
+
+    pub fn fetch(&mut self, pc: u16){
         self.opcode.code = u16::from_be_bytes([self.memory.addr_mem[pc as usize], self.memory.addr_mem[(pc + 1) as usize]])
     }
 
-    fn decode(&mut self){
+    pub fn decode(&mut self){
         let kind = Opcode::find_kind(self.opcode.code).unwrap();
         self.opcode.kind = kind;
     }
 
-    fn execute(&mut self){
+    pub fn execute(&mut self){
         match self.opcode.kind{
             OpcodeTypes::CLS => todo!(),
             OpcodeTypes::RET => {
