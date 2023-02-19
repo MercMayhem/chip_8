@@ -3,6 +3,9 @@ use crate::memory::Memory;
 use crate::opcode::{Opcode, OpcodeTypes};
 extern crate rand;
 use crate::cpu::rand::Rng;
+extern crate minifb;
+use minifb::{Window, WindowOptions};
+use std::collections::hash_map::HashMap;
 
 const FONT_SET: [[u8; 5]; 16] = [[0xF0,0x90,0x90,0x90,0xF0], [0x20,0x60,0x20,0x20,0x70,], [0xF0,0x10,0xF0,0x80,0xF0], [0xF0,0x10,0xF0,0x10,0xF0], [0x90,0x90,0xF0,0x10,0x10], 
 [0xF0,0x80,0xF0,0x10,0xF0], [0xF0,0x80,0xF0,0x90,0xF0], [0xF0,0x10,0x20,0x40,0x40], [0xF0,0x90,0xF0,0x90,0xF0], [0xF0,0x90,0xF0,0x10,0xF0], 
@@ -11,7 +14,8 @@ const FONT_SET: [[u8; 5]; 16] = [[0xF0,0x90,0x90,0x90,0xF0], [0x20,0x60,0x20,0x2
 pub struct Cpu{
     opcode : Opcode,
     memory : Memory,
-    keyboard : [u8; 16]
+    window : Window,
+    key_map : HashMap<char, char>
 }
 
 impl Cpu{
@@ -37,7 +41,43 @@ impl Cpu{
             addr_mem[i.0 + 511] = *i.1
         }
 
-        todo!()
+        let memory = Memory{
+            addr_mem,
+            reg : [0; 16],
+            i : 0,
+            pc : 0,
+            stack : [None; 16],
+            sp : 0,
+            delay : 0,
+            sound : 0
+        };
+
+        let opcode = Opcode{
+            code : 0,
+            kind : None
+        };
+
+        let window = Window::new("CHIP-8", 64, 32, WindowOptions::default()).unwrap();
+
+        let key_map = HashMap::from([
+            ('1','1'),
+            ('2','2'),
+            ('3','3'),
+            ('4','C'),
+            ('Q','4'),
+            ('W','5'),
+            ('E','6'),
+            ('R','D'),
+            ('A','7'),
+            ('S','8'),
+            ('D','9'),
+            ('F','E'),
+            ('Z','A'),
+            ('X','0'),
+            ('C','B'),
+            ('V','F'),
+        ]);
+        Cpu {opcode, memory, window, key_map}
     }
 
     pub fn wait_input() -> u8 {
@@ -50,12 +90,14 @@ impl Cpu{
 
     pub fn decode(&mut self){
         let kind = Opcode::find_kind(self.opcode.code).unwrap();
-        self.opcode.kind = kind;
+        self.opcode.kind = Some(kind);
     }
 
     pub fn execute(&mut self){
-        match self.opcode.kind{
-            OpcodeTypes::CLS => todo!(),
+        match self.opcode.kind.as_ref().expect("incorrect opcode"){
+            OpcodeTypes::CLS => {
+                self.window.update_with_buffer(&[0; 64 * 32], 64, 32).unwrap()
+            },
             OpcodeTypes::RET => {
                 self.memory.pc = self.memory.stack[self.memory.sp as usize].expect("None in stack");
                 self.memory.sp -= 1;
@@ -212,20 +254,10 @@ impl Cpu{
                 todo!()
             },
             OpcodeTypes::SKPVx => {
-                let bytes = self.opcode.code.to_be_bytes();
-                let byte = bytes[0] & 0x0F;
-
-                if self.keyboard[byte as usize] == 1{
-                    self.memory.pc += 2
-                }
+                todo!()
             },
             OpcodeTypes::SKNPVx => {
-                let bytes = self.opcode.code.to_be_bytes();
-                let byte = bytes[0] & 0x0F;
-
-                if self.keyboard[byte as usize] == 0{
-                    self.memory.pc += 2
-                }
+                todo!()
             },
             OpcodeTypes::LDVxDT => {
                 let bytes = self.opcode.code.to_be_bytes();
