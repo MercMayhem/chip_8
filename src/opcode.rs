@@ -38,7 +38,7 @@ pub enum OpcodeTypes{
 
 pub struct Opcode{
     pub code : u16,
-    pub kind : OpcodeTypes
+    pub kind : Option<OpcodeTypes>
 }
 
 impl Opcode {
