@@ -4,7 +4,7 @@ use crate::opcode::{Opcode, OpcodeTypes};
 extern crate rand;
 use crate::cpu::rand::Rng;
 extern crate minifb;
-use minifb::{Window, WindowOptions};
+use minifb::{Window, WindowOptions, Key, KeyRepeat};
 use std::collections::hash_map::HashMap;
 
 const FONT_SET: [[u8; 5]; 16] = [[0xF0,0x90,0x90,0x90,0xF0], [0x20,0x60,0x20,0x20,0x70,], [0xF0,0x10,0xF0,0x80,0xF0], [0xF0,0x10,0xF0,0x10,0xF0], [0x90,0x90,0xF0,0x10,0x10], 
@@ -15,7 +15,8 @@ pub struct Cpu{
     opcode : Opcode,
     memory : Memory,
     window : Window,
-    key_map : HashMap<char, char>
+    key_map : HashMap<Key, u8>,
+    curr_buffer : [[u32;64];32]
 }
 
 impl Cpu{
@@ -57,31 +58,31 @@ impl Cpu{
             kind : None
         };
 
-        let window = Window::new("CHIP-8", 64, 32, WindowOptions::default()).unwrap();
+        let mut window = Window::new("CHIP-8", 640, 320, WindowOptions::default()).unwrap();
+        window.update_with_buffer(&[0; 2048], 64, 32).unwrap();
+        window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+
+        let curr_buffer = [[0;64];32];
 
         let key_map = HashMap::from([
-            ('1','1'),
-            ('2','2'),
-            ('3','3'),
-            ('4','C'),
-            ('Q','4'),
-            ('W','5'),
-            ('E','6'),
-            ('R','D'),
-            ('A','7'),
-            ('S','8'),
-            ('D','9'),
-            ('F','E'),
-            ('Z','A'),
-            ('X','0'),
-            ('C','B'),
-            ('V','F'),
+            (Key::Key1,1 as u8),
+            (Key::Key2,2),
+            (Key::Key3,3),
+            (Key::Key4,12),
+            (Key::Q,4),
+            (Key::W,5),
+            (Key::E,6),
+            (Key::R,13),
+            (Key::A,7),
+            (Key::S,8),
+            (Key::D,9),
+            (Key::F,14),
+            (Key::Z,10),
+            (Key::X,0),
+            (Key::C,11),
+            (Key::V,15),
         ]);
-        Cpu {opcode, memory, window, key_map}
-    }
-
-    pub fn wait_input() -> u8 {
-        todo!()
+        Cpu {opcode, memory, window, key_map, curr_buffer}
     }
 
     pub fn fetch(&mut self, pc: u16){
@@ -251,13 +252,72 @@ impl Cpu{
                 self.memory.reg[reg as usize] = random_byte & byte;
             },
             OpcodeTypes::DRWVxVyNibble => {
-                todo!()
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg_x = bytes[0] & 0x0F;
+                let reg_y = bytes[1].rotate_left(4) & 0x0F;
+                let n = bytes[1] & 0x0F;
+                let x_coord = self.memory.reg[reg_x as usize];
+                let y_coord = self.memory.reg[reg_y as usize];
+                
+                self.memory.reg[15] = 0;
+
+                for row in 0..n{
+                    let byte = self.memory.addr_mem[(self.memory.i + row as u16) as usize];
+                    let rel_y_coord = y_coord + row;
+
+                    for pixel in 0..8_u8{
+                        let bit = (byte >> pixel) & 0x1;
+                        let rel_x_coord = x_coord + pixel;
+                        
+                        if bit != 0{
+                            if self.curr_buffer[rel_y_coord as usize][rel_x_coord as usize] == 0{
+                                self.curr_buffer[rel_y_coord as usize][rel_x_coord as usize] = 0xFFFFFF
+                            }
+
+                            else{
+                                self.memory.reg[15] = 1;
+                            }
+                        }
+                        if rel_x_coord == 63{
+                            break;
+                        }
+                    }
+                    if rel_y_coord == 31{
+                        break;
+                    }
+                }
+
+                let mut flattened_buffer = [0_u32; 2048];
+                for row in 0..32_u8{
+                    let start_index = row * 64;
+                    let end_index = start_index + 64;
+
+                    flattened_buffer[start_index as usize..end_index as usize].copy_from_slice(&self.curr_buffer[row as usize][..]);
+                }
+
+                self.window.update_with_buffer(&flattened_buffer, 64, 32).unwrap();
             },
             OpcodeTypes::SKPVx => {
-                todo!()
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                let key_as_chip8 = self.memory.reg[reg as usize];
+                let real_key = self.key_map.iter().find_map(|(key, &val)| if val == key_as_chip8 {Some(key)} else {None});
+
+                if self.window.is_key_down(*real_key.expect("Vx did not contain a Key value")){
+                    self.memory.pc += 2
+                }
             },
             OpcodeTypes::SKNPVx => {
-                todo!()
+                let bytes = self.opcode.code.to_be_bytes();
+                let reg = bytes[0] & 0x0F;
+
+                let key_as_chip8 = self.memory.reg[reg as usize];
+                let real_key = self.key_map.iter().find_map(|(key, &val)| if val == key_as_chip8 {Some(key)} else {None});
+
+                if !self.window.is_key_down(*real_key.expect("Vx did not contain a Key value")){
+                    self.memory.pc += 2
+                }
             },
             OpcodeTypes::LDVxDT => {
                 let bytes = self.opcode.code.to_be_bytes();
@@ -269,8 +329,8 @@ impl Cpu{
                 let bytes = self.opcode.code.to_be_bytes();
                 let reg = bytes[0] & 0x0F;
 
-                let k = Self::wait_input();
-                self.memory.reg[reg as usize] = k;
+                let k = self.window.get_keys();
+                self.memory.reg[reg as usize] = self.key_map[&k[0]];
             },
             OpcodeTypes::LDDTVx => {
                 let bytes = self.opcode.code.to_be_bytes();
