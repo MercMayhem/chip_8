@@ -1,52 +1,61 @@
+use std::fs::File;
 use std::{path::Path, fs::read};
 use crate::memory::Memory;
 use crate::opcode::{Opcode, OpcodeTypes};
 extern crate rand;
 use crate::cpu::rand::Rng;
 extern crate minifb;
-use minifb::{Window, WindowOptions, Key, KeyRepeat};
+use minifb::{Window, WindowOptions, Key};
 use std::collections::hash_map::HashMap;
+use std::io::Write;
 
 const FONT_SET: [[u8; 5]; 16] = [[0xF0,0x90,0x90,0x90,0xF0], [0x20,0x60,0x20,0x20,0x70,], [0xF0,0x10,0xF0,0x80,0xF0], [0xF0,0x10,0xF0,0x10,0xF0], [0x90,0x90,0xF0,0x10,0x10], 
 [0xF0,0x80,0xF0,0x10,0xF0], [0xF0,0x80,0xF0,0x90,0xF0], [0xF0,0x10,0x20,0x40,0x40], [0xF0,0x90,0xF0,0x90,0xF0], [0xF0,0x90,0xF0,0x10,0xF0], 
 [0xF0,0x90,0xF0,0x90,0x90], [0xE0,0x90,0xE0,0x90,0xE0], [0xF0,0x80,0x80,0x80,0xF0], [0xE0,0x90,0x90,0x90,0xE0], [0xF0,0x80,0xF0,0x80,0xF0], [0xF0,0x80,0xF0,0x80,0x80]];
 
 pub struct Cpu{
-    opcode : Opcode,
-    memory : Memory,
-    window : Window,
-    key_map : HashMap<Key, u8>,
-    curr_buffer : [[u32;64];32]
+    pub opcode : Opcode,
+    pub memory : Memory,
+    pub window : Window,
+    pub key_map : HashMap<Key, u8>,
+    pub curr_buffer : [[u32;64];32]
 }
 
 impl Cpu{
     pub fn initialize(file_path: &str) -> Cpu{
         let path = Path::new(file_path);
-        let file = read(path).unwrap();
+        let file_vec = read(path).unwrap();
+
+        let mut file = File::create("output.txt").expect("Failed to create file");
+
+        for item in file_vec.iter() {
+            writeln!(&mut file, "{:X?}", item).expect("Failed to write to file");
+        }
+            
 
         let mut addr_mem: [u8; 4096] = [0; 4096];
 
-        if file.len() > 4096{
+        if file_vec.len() > 4096{
             panic!("Incorrect length of file")
         }
 
         for (start, bytes) in FONT_SET.iter().enumerate(){
-            addr_mem[5 * start] = bytes[0];
-            addr_mem[5 * start + 1] = bytes[1];
-            addr_mem[5 * start + 2] = bytes[2];
-            addr_mem[5 * start + 3] = bytes[3];
-            addr_mem[5 * start + 4] = bytes[4];
+            addr_mem[(5 * start)] = bytes[0];
+            addr_mem[(5 * start) + 1] = bytes[1];
+            addr_mem[(5 * start) + 2] = bytes[2];
+            addr_mem[(5 * start) + 3] = bytes[3];
+            addr_mem[(5 * start) + 4] = bytes[4];
         }
 
-        for i in file.iter().enumerate(){
-            addr_mem[i.0 + 511] = *i.1
+        for i in file_vec.iter().enumerate(){
+            addr_mem[i.0 + 512] = *i.1
         }
 
         let memory = Memory{
             addr_mem,
             reg : [0; 16],
             i : 0,
-            pc : 0,
+            pc : 0x200,
             stack : [None; 16],
             sp : 0,
             delay : 0,
@@ -82,15 +91,23 @@ impl Cpu{
             (Key::C,11),
             (Key::V,15),
         ]);
+
+        let mut file2 = File::create("output2.txt").expect("Failed to create file");
+        for i in addr_mem.iter().enumerate(){
+            writeln!(&mut file2, "{} : {:X?}", i.0, i.1).expect("Failed to write to file");
+        }
+
         Cpu {opcode, memory, window, key_map, curr_buffer}
     }
 
-    pub fn fetch(&mut self, pc: u16){
-        self.opcode.code = u16::from_be_bytes([self.memory.addr_mem[pc as usize], self.memory.addr_mem[(pc + 1) as usize]])
+    pub fn fetch(&mut self){
+        self.opcode.code = u16::from_be_bytes([self.memory.addr_mem[self.memory.pc as usize], self.memory.addr_mem[(self.memory.pc + 1) as usize]]);
+        println!("{:X?}", self.opcode.code)
     }
 
     pub fn decode(&mut self){
         let kind = Opcode::find_kind(self.opcode.code).unwrap();
+        println!("{:?}\n", kind);
         self.opcode.kind = Some(kind);
     }
 
@@ -100,15 +117,17 @@ impl Cpu{
                 self.window.update_with_buffer(&[0; 64 * 32], 64, 32).unwrap()
             },
             OpcodeTypes::RET => {
-                self.memory.pc = self.memory.stack[self.memory.sp as usize].expect("None in stack");
                 self.memory.sp -= 1;
+                self.memory.pc = self.memory.stack[self.memory.sp as usize].expect("None in stack") + 2;
+                self.memory.stack[self.memory.sp as usize] = None;
             },
             OpcodeTypes::JPAddr => {
                 self.memory.pc = self.opcode.code & 0x0FFF;
             },
             OpcodeTypes::CALLAddr => {
+                self.memory.stack[self.memory.sp as usize] = Some(self.memory.pc);
                 self.memory.sp += 1;
-                self.memory.stack[self.memory.sp as usize] = Some(self.memory.pc)
+                self.memory.pc = self.opcode.code & 0xFFF;
             },
             OpcodeTypes::SEVxByte => {
                 let bytes = self.opcode.code.to_be_bytes();
@@ -116,6 +135,9 @@ impl Cpu{
                 let comp_val = bytes[1];
 
                 if self.memory.reg[reg_no as usize] == comp_val{
+                    self.memory.pc += 4;
+                }
+                else {
                     self.memory.pc += 2;
                 }
             },
@@ -125,6 +147,9 @@ impl Cpu{
                 let comp_val = bytes[1];
 
                 if self.memory.reg[reg_no as usize] != comp_val{
+                    self.memory.pc += 4;
+                }
+                else{
                     self.memory.pc += 2;
                 }
             },
@@ -134,6 +159,9 @@ impl Cpu{
                 let reg2 = bytes[1].rotate_left(4) & 0x0F;
 
                 if self.memory.reg[reg1 as usize] == self.memory.reg[reg2 as usize]{
+                    self.memory.pc += 4;
+                }
+                else{
                     self.memory.pc += 2;
                 }
             },
@@ -147,7 +175,7 @@ impl Cpu{
                 let bytes = self.opcode.code.to_be_bytes();
                 let reg_no = bytes[0] & 0x0F;
 
-                self.memory.reg[reg_no as usize] += bytes[1]
+                self.memory.reg[reg_no as usize] = self.memory.reg[reg_no as usize].wrapping_add(bytes[1])
             },
             OpcodeTypes::LDVxVy => {
                 let bytes = self.opcode.code.to_be_bytes();
@@ -266,7 +294,7 @@ impl Cpu{
                     let rel_y_coord = y_coord + row;
 
                     for pixel in 0..8_u8{
-                        let bit = (byte >> pixel) & 0x1;
+                        let bit = byte & (0x1 << 7 - pixel);
                         let rel_x_coord = x_coord + pixel;
                         
                         if bit != 0{
@@ -288,7 +316,7 @@ impl Cpu{
                 }
 
                 let mut flattened_buffer = [0_u32; 2048];
-                for row in 0..32_u8{
+                for row in 0..32_u16{
                     let start_index = row * 64;
                     let end_index = start_index + 64;
 
