@@ -69,7 +69,6 @@ impl Cpu{
 
         let mut window = Window::new("CHIP-8", 640, 320, WindowOptions::default()).unwrap();
         window.update_with_buffer(&[0; 2048], 64, 32).unwrap();
-        window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
         let curr_buffer = [[0;64];32];
 
@@ -303,6 +302,7 @@ impl Cpu{
                             }
 
                             else{
+                                self.curr_buffer[rel_y_coord as usize][rel_x_coord as usize] = 0;
                                 self.memory.reg[15] = 1;
                             }
                         }
@@ -333,7 +333,10 @@ impl Cpu{
                 let real_key = self.key_map.iter().find_map(|(key, &val)| if val == key_as_chip8 {Some(key)} else {None});
 
                 if self.window.is_key_down(*real_key.expect("Vx did not contain a Key value")){
-                    self.memory.pc += 2
+                    self.memory.pc += 4;
+                }
+                else {
+                    self.memory.pc += 2;
                 }
             },
             OpcodeTypes::SKNPVx => {
@@ -344,6 +347,10 @@ impl Cpu{
                 let real_key = self.key_map.iter().find_map(|(key, &val)| if val == key_as_chip8 {Some(key)} else {None});
 
                 if !self.window.is_key_down(*real_key.expect("Vx did not contain a Key value")){
+                    self.memory.pc += 4
+                }
+
+                else {
                     self.memory.pc += 2
                 }
             },
@@ -414,5 +421,18 @@ impl Cpu{
                 }
             }
         }
+    }
+
+    pub fn reset(&mut self){
+        self.memory.pc = 512;
+        self.memory.reg = [0; 16];
+        self.memory.i = 0;
+        self.memory.stack = [None; 16];
+        self.memory.sp = 0;
+        self.memory.delay = 0;
+        self.memory.sound = 0;
+
+        self.curr_buffer = [[0;64];32];
+        self.window.update_with_buffer(&[0; 2048], 64, 32).unwrap();
     }
 }
