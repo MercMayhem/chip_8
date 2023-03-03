@@ -2,15 +2,30 @@ mod memory;
 mod cpu;
 mod opcode;
 extern crate minifb;
+extern crate clap;
 
 use std::time::Instant;
 
 use cpu::Cpu;
 use minifb::Key;
 use opcode::OpcodeTypes;
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(name = "SCUF-8")]
+#[command(author = "Aman Rao (amanrao032@gmail.com)")]
+#[command(version = "1.0")]
+#[command(about = "Scuffed Chip-8 Emulator", long_about = None)]
+struct Cli{
+    /// File Path for Chip 8 program
+    path: String
+}
 
 fn main() {
-    let mut processor = Cpu::initialize(&r"C:\Users\amanr\OneDrive\Documents\Coding projects\rust\CHIP-8\chip_8\chip8-test-rom-master\Tetris [Fran Dachille, 1991].ch8");
+    let cli = Cli::parse();
+
+    let path = &cli.path;
+    let mut processor = Cpu::initialize(path);
 
     let mut last_cycle = Instant::now();
 
@@ -48,5 +63,7 @@ fn main() {
 
             last_cycle = now;
         }
+
+        processor.key = processor.window.get_keys_pressed(minifb::KeyRepeat::No)
     }
 }

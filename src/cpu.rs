@@ -18,7 +18,8 @@ pub struct Cpu{
     pub memory : Memory,
     pub window : Window,
     pub key_map : HashMap<Key, u8>,
-    pub curr_buffer : [[u32;64];32]
+    pub curr_buffer : [[u32;64];32],
+    pub key : Vec<Key>
 }
 
 impl Cpu{
@@ -62,6 +63,8 @@ impl Cpu{
             sound : 0
         };
 
+        let key: Vec<Key> = [].to_vec();
+
         let opcode = Opcode{
             code : 0,
             kind : None
@@ -96,7 +99,7 @@ impl Cpu{
             writeln!(&mut file2, "{} : {:X?}", i.0, i.1).expect("Failed to write to file");
         }
 
-        Cpu {opcode, memory, window, key_map, curr_buffer}
+        Cpu {opcode, memory, window, key_map, curr_buffer, key}
     }
 
     pub fn fetch(&mut self){
@@ -363,9 +366,9 @@ impl Cpu{
             OpcodeTypes::LDVxK => {
                 let bytes = self.opcode.code.to_be_bytes();
                 let reg = bytes[0] & 0x0F;
+                
 
-                let k = self.window.get_keys();
-                self.memory.reg[reg as usize] = self.key_map[&k[0]];
+                self.memory.reg[reg as usize] = self.key_map[&self.key[0]];
             },
             OpcodeTypes::LDDTVx => {
                 let bytes = self.opcode.code.to_be_bytes();
@@ -431,6 +434,7 @@ impl Cpu{
         self.memory.sp = 0;
         self.memory.delay = 0;
         self.memory.sound = 0;
+        self.key = [].to_vec();
 
         self.curr_buffer = [[0;64];32];
         self.window.update_with_buffer(&[0; 2048], 64, 32).unwrap();
